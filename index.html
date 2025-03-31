@@ -5,15 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>JDM Bingo Tracker</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Canvas Confetti Library -->
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
   <header>
     <h1>JDM Bingo Tracker</h1>
   </header>
 
-  <!-- Score & Rank Display -->
+  <!-- Score & rank display -->
   <div id="scoreDisplay">Total Points: 0 | Rank: N/A</div>
   <div id="rankContainer">
     <div id="rankDisplay">
@@ -21,17 +19,14 @@
     </div>
   </div>
 
-  <!-- Progress Bar -->
+  <!-- Progress bar -->
   <div id="progressContainer">
     <div id="progressBar"></div>
     <div id="progressText">0/25 Cars - Next Rank in 0 points</div>
   </div>
 
-  <!-- Bingo Grid -->
+  <!-- Bingo grid -->
   <div class="grid-container" id="grid"></div>
-  
-  <!-- Floating Message Container (for full-screen messages) -->
-  <div id="floatingMessageContainer"></div>
   
   <!-- Modal -->
   <div id="modal" class="modal">
@@ -45,12 +40,7 @@
   
   <script src="data.js"></script>
   <script>
-    // Global variable for tracking active bingo lines
-    let activeBingoIndices = new Set();
-    // Global variable to track previous rank index for dopamine effects
-    let prevRankIndex = -1;
-
-    // Build the grid from car data in data.js
+    // Build grid and attach event listeners
     function buildGrid() {
       const grid = document.getElementById("grid");
       grid.innerHTML = "";
@@ -73,16 +63,12 @@
           checkbox.checked = true;
           card.classList.add("checked");
         }
-        // Toggle check on clicking the check container
         const container = card.querySelector(".check-container");
         container.addEventListener("click", () => {
-          // Only trigger dopamine effects when checking (not unchecking)
-          const willBeChecked = !checkbox.checked;
-          checkbox.checked = willBeChecked;
+          checkbox.checked = !checkbox.checked;
           localStorage.setItem("car-" + index, checkbox.checked);
-          if (willBeChecked) {
+          if (checkbox.checked) {
             card.classList.add("checked");
-            showFullScreenMessage(`${car.name} GET!`, "floating-get");
           } else {
             card.classList.remove("checked");
           }
@@ -90,11 +76,9 @@
         });
         checkbox.addEventListener("click", (e) => {
           e.stopPropagation();
-          const willBeChecked = checkbox.checked;
           localStorage.setItem("car-" + index, checkbox.checked);
-          if (willBeChecked) {
+          if (checkbox.checked) {
             card.classList.add("checked");
-            showFullScreenMessage(`${car.name} GET!`, "floating-get");
           } else {
             card.classList.remove("checked");
           }
@@ -135,26 +119,7 @@
       }
     };
 
-    // Show a full-screen floating message with a given CSS class (for GET and BINGO messages)
-    function showFullScreenMessage(text, cssClass) {
-      const msgEl = document.createElement("div");
-      msgEl.className = "floating-text " + cssClass;
-      msgEl.textContent = text;
-      document.getElementById("floatingMessageContainer").appendChild(msgEl);
-      setTimeout(() => { msgEl.remove(); }, 1500);
-    }
-
-    // Fireworks/confetti effect (using canvas-confetti)
-    function triggerFireworks(color) {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: [color]
-      });
-    }
-
-    // Score calculation and update
+    // Score calculation & update
     function updateScore() {
       const checkboxes = document.querySelectorAll(".card input[type='checkbox']");
       let baseScore = 0;
@@ -170,7 +135,10 @@
         }
       });
 
-      // Compute current bingo lines
+      // Clear bingo highlights
+      document.querySelectorAll(".card").forEach(card => card.classList.remove("bingo-active"));
+
+      // Define bingo lines (rows, columns, diagonals)
       const lines = [
         [0,1,2,3,4],
         [5,6,7,8,9],
@@ -185,10 +153,9 @@
         [0,6,12,18,24],
         [4,8,12,16,20]
       ];
-      let currentBingoIndices = new Set();
-      lines.forEach((line, lineIndex) => {
+
+      lines.forEach(line => {
         if (line.every(idx => state[idx])) {
-          currentBingoIndices.add(lineIndex);
           let product = 1;
           line.forEach(idx => {
             product *= cars[idx].rarity;
@@ -196,15 +163,8 @@
             card.classList.add("bingo-active");
           });
           bonusScore += product;
-          // Only show BINGO message if this line is new
-          if (!activeBingoIndices.has(lineIndex)) {
-            showFullScreenMessage("BINGO!", "floating-bingo");
-            // Also show floating points on the rank tag
-            showFloatingTextInCard(document.getElementById("rankDisplay"), `+${product}`, "#ff9800");
-          }
         }
       });
-      activeBingoIndices = currentBingoIndices; // update global bingo state
 
       const totalScore = baseScore + bonusScore;
       const rank = getRank(totalScore);
@@ -212,27 +172,8 @@
         `Total Points: ${totalScore} | Rank: ${rank}`;
       updateProgress(checkedCount, totalScore);
       updateRankDisplay(rank);
-      
-      // Check for rank upgrade and trigger fireworks if upgraded
-      let newRankIndex = getRankIndex(rank);
-      if (newRankIndex > prevRankIndex) {
-        const rankColor = getRankColor(rank);
-        triggerFireworks(rankColor);
-        prevRankIndex = newRankIndex;
-      }
     }
 
-    // Helper: show a small floating text on an element (for rank tag points)
-    function showFloatingTextInCard(parent, text, color) {
-      const floatEl = document.createElement("div");
-      floatEl.className = "floating-text small";
-      floatEl.style.color = color;
-      floatEl.textContent = text;
-      parent.appendChild(floatEl);
-      setTimeout(() => { floatEl.remove(); }, 1500);
-    }
-
-    // Helper: get rank based on score
     function getRank(score) {
       const allChecked = cars.every((car, i) =>
         document.getElementById(`check-${i}`).checked
@@ -249,23 +190,6 @@
       return "N/A";
     }
 
-    // Helper: get rank index (order defined by rankThresholds array; JDM MASTER is highest)
-    function getRankIndex(rank) {
-      if (rank === "JDM MASTER") return rankThresholds.length;
-      for (let i = 0; i < rankThresholds.length; i++) {
-        if (rankThresholds[i].rank === rank) return i;
-      }
-      return -1;
-    }
-
-    // Helper: get main color for a given rank
-    function getRankColor(rank) {
-      if (rank === "JDM MASTER") return "#ffd700";
-      let matched = rankThresholds.find(th => th.rank === rank);
-      return matched ? matched.mainColor : "#444";
-    }
-
-    // Update progress bar and text
     function updateProgress(checkedCount, totalScore) {
       const progressBar = document.getElementById("progressBar");
       const progressText = document.getElementById("progressText");
@@ -287,7 +211,6 @@
       progressBar.style.backgroundColor = color;
     }
 
-    // Update rank tag display with animated diagonal stripes and gloss
     function updateRankDisplay(rank) {
       const rankDisplay = document.getElementById("rankDisplay");
       const rankLetter = document.getElementById("rankLetter");
